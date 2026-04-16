@@ -1,0 +1,44 @@
+# Python artifacts
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.Python
+env/
+venv/
+.venv/
+
+# Environment variables (SENSITIVE)
+.env
+
+# Local database
+inventory.sqlite3
+
+# Exported data
+csv_export/
+*.csv
+*.xlsx
+
+# Streamlit
+.streamlit/
+
+# OS specific files
+.DS_Store
+Thumbs.db
+
+# Local startup scripts
+*.bat
+*.vbs
+
+# Backend and Database (Supabase/Postgres)
+migrate_sqlite_to_postgres.py
+supabase_schema.sql
+verify_postgres_setup.py
+export_sqlite_to_csv.py
+run_local.py
+stop_local.py
+
+# Deployment
+Dockerfile
+.dockerignore
+Procfile

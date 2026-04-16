@@ -1,0 +1,8 @@
+.venv
+__pycache__
+csv_export
+inventory.sqlite3
+inventory.sqlite3-shm
+inventory.sqlite3-wal
+.inventory_server.json
+
