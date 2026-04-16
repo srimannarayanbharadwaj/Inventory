@@ -63,23 +63,24 @@ def get_theme_css() -> str:
         <style>
         @import url('https://fonts.googleapis.com/css2?family=Manrope:wght@600&family=Space+Grotesk&family=Inter&display=swap');
 
-          /* Hide ONLY the specific GitHub, Fork, and Share links in the toolbar */
-          div[data-testid="stToolbar"] a, 
-          div[data-testid="stToolbar"] button:not(#MainMenu),
+          /* Hide ONLY the Fork, GitHub, and Share links in the toolbar */
+          /* We target the toolbar children but keep the last one (usually the 3-dot menu) */
+          div[data-testid="stToolbar"] > div:nth-child(1),
+          div[data-testid="stToolbar"] > div:nth-child(2),
+          div[data-testid="stToolbar"] > a,
           div[data-testid="stDecoration"],
           div[class*="stAppDeployButton"],
           button[title="Manage app"],
           footer {
-              visibility: hidden;
               display: none !important;
           }
 
-          /* Ensure Main Menu (3 dots) and Sidebar are visible */
-          #MainMenu, 
+          /* Force Sidebar and 3-dot menu visibility */
           section[data-testid="stSidebar"],
-          button[data-testid="stSidebarCollapseButton"] {
-              visibility: visible !important;
+          [data-testid="stSidebarCollapseButton"],
+          #MainMenu {
               display: block !important;
+              visibility: visible !important;
           }
 
           /* Specifically target Fork and GitHub buttons if they appear outside the toolbar */
