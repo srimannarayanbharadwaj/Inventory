@@ -63,10 +63,14 @@ def get_theme_css() -> str:
         <style>
         @import url('https://fonts.googleapis.com/css2?family=Manrope:wght@600&family=Space+Grotesk&family=Inter&display=swap');
 
-          /* Hide Streamlit Header (Share, Star, Edit, etc.) */
-          header[data-testid="stHeader"] {
+          /* Hide Streamlit Header, GitHub Icon, and Main Menu */
+          header[data-testid="stHeader"], 
+          #MainMenu, 
+          div[data-testid="stStatusWidget"],
+          div[data-testid="stToolbar"],
+          footer {
               visibility: hidden;
-              height: 0%;
+              display: none !important;
           }
 
           /* Desktop: keep the original wide look, just add comfortable padding */
