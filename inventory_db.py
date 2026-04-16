@@ -158,6 +158,10 @@ def _sync_categories_from_products(conn) -> None:
 
 def init_db(conn) -> None:
     if _is_postgres(conn):
+        # Set a slightly longer timeout for initialization if needed, 
+        # though our column checks should make this very fast.
+        _execute(conn, "SET statement_timeout = '60s'")
+
         statements = [
             """
             CREATE TABLE IF NOT EXISTS categories (
@@ -216,13 +220,34 @@ def init_db(conn) -> None:
             "CREATE INDEX IF NOT EXISTS idx_tx_created_at ON transactions(created_at)",
             "CREATE INDEX IF NOT EXISTS idx_orders_created_by ON orders(created_by)",
             "CREATE INDEX IF NOT EXISTS idx_orders_created_at ON orders(created_at)",
-            "ALTER TABLE transactions ADD COLUMN IF NOT EXISTS created_by TEXT NOT NULL DEFAULT ''",
-            "ALTER TABLE users ADD COLUMN IF NOT EXISTS recovery_question TEXT NOT NULL DEFAULT ''",
-            "ALTER TABLE users ADD COLUMN IF NOT EXISTS recovery_answer_hash TEXT NOT NULL DEFAULT ''",
-            "ALTER TABLE orders ADD COLUMN IF NOT EXISTS inventory_applied INTEGER NOT NULL DEFAULT 0",
         ]
         for statement in statements:
             _execute(conn, statement)
+
+        # Optimization: Check if columns exist before attempting ALTER TABLE to avoid lock contention and timeouts
+        # PostgreSQL's ALTER TABLE ADD COLUMN IF NOT EXISTS still requires an ACCESS EXCLUSIVE lock.
+        
+        # Check transactions.created_by
+        res = _execute(conn, "SELECT column_name FROM information_schema.columns WHERE table_name='transactions' AND column_name='created_by'").fetchone()
+        if not res:
+            _execute(conn, "ALTER TABLE transactions ADD COLUMN created_by TEXT NOT NULL DEFAULT ''")
+
+        # Check users.recovery_question and recovery_answer_hash
+        user_cols = _execute(conn, "SELECT column_name FROM information_schema.columns WHERE table_name='users' AND column_name IN ('recovery_question', 'recovery_answer_hash')").fetchall()
+        user_col_names = [row[0] for row in user_cols]
+        if 'recovery_question' not in user_col_names:
+            _execute(conn, "ALTER TABLE users ADD COLUMN recovery_question TEXT NOT NULL DEFAULT ''")
+        if 'recovery_answer_hash' not in user_col_names:
+            _execute(conn, "ALTER TABLE users ADD COLUMN recovery_answer_hash TEXT NOT NULL DEFAULT ''")
+
+        # Check orders.inventory_applied
+        res = _execute(conn, "SELECT column_name FROM information_schema.columns WHERE table_name='orders' AND column_name='inventory_applied'").fetchone()
+        if not res:
+            _execute(conn, "ALTER TABLE orders ADD COLUMN inventory_applied INTEGER NOT NULL DEFAULT 0")
+
+        # Reset timeout to default (usually 0 is unlimited or server default)
+        _execute(conn, "SET statement_timeout = 0")
+
     else:
         conn.executescript(
             """
