@@ -72,6 +72,8 @@ def get_theme_css() -> str:
           div[class^="st-emotion-cache-mq0m0e"],
           div[class*="stAppDeployButton"],
           button[title="Manage app"],
+          [data-testid="stSidebarNav"] + div,
+          .stApp > header,
           footer {
               visibility: hidden;
               display: none !important;
@@ -319,6 +321,7 @@ def login_view(conn) -> None:
 
 def main() -> None:
     st.set_page_config(page_title="Inventory System", layout="wide")
+    st.markdown(get_theme_css(), unsafe_allow_html=True)
     st.title("Inventory System")
 
     conn = get_conn(schema_version=5)
@@ -341,8 +344,6 @@ def main() -> None:
         if st.button("Logout", key="logout_btn"):
             st.session_state.pop("auth_user", None)
             st.rerun()
-
-    st.markdown(get_theme_css(), unsafe_allow_html=True)
 
     category_list = fetch_categories(conn)
     all_products = fetch_products(conn)
