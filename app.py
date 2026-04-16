@@ -63,19 +63,37 @@ def get_theme_css() -> str:
         <style>
         @import url('https://fonts.googleapis.com/css2?family=Manrope:wght@600&family=Space+Grotesk&family=Inter&display=swap');
 
-          /* Hide Streamlit Header, GitHub Icon, Main Menu, and App Management */
-          header[data-testid="stHeader"], 
-          #MainMenu, 
-          div[data-testid="stStatusWidget"],
+          /* Hide Streamlit Toolbar (Fork, GitHub, Share) and App Management */
+          header[data-testid="stHeader"] {
+              background-color: transparent !important;
+          }
+          
           div[data-testid="stToolbar"],
           div[data-testid="stDecoration"],
           div[class^="st-emotion-cache-mq0m0e"],
           div[class*="stAppDeployButton"],
           button[title="Manage app"],
           [data-testid="stSidebarNav"] + div,
-          .stApp > header,
           footer {
               visibility: hidden;
+              display: none !important;
+          }
+
+          /* Ensure Main Menu (3 dots) is visible and properly positioned */
+          #MainMenu {
+              visibility: visible !important;
+              display: block !important;
+          }
+          
+          /* Specifically target the menu button to ensure it's not hidden by its parent header */
+          header[data-testid="stHeader"] #MainMenu {
+              visibility: visible !important;
+              display: block !important;
+          }
+
+          /* Specifically target Fork and GitHub buttons if they appear outside the toolbar */
+          button[data-testid="stAppDeployButton"],
+          a[href*="github.com"] {
               display: none !important;
           }
 
