@@ -63,11 +63,15 @@ def get_theme_css() -> str:
         <style>
         @import url('https://fonts.googleapis.com/css2?family=Manrope:wght@600&family=Space+Grotesk&family=Inter&display=swap');
 
-          /* Hide Streamlit Header, GitHub Icon, and Main Menu */
+          /* Hide Streamlit Header, GitHub Icon, Main Menu, and App Management */
           header[data-testid="stHeader"], 
           #MainMenu, 
           div[data-testid="stStatusWidget"],
           div[data-testid="stToolbar"],
+          div[data-testid="stDecoration"],
+          div[class^="st-emotion-cache-mq0m0e"],
+          div[class*="stAppDeployButton"],
+          button[title="Manage app"],
           footer {
               visibility: hidden;
               display: none !important;
