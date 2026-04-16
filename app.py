@@ -63,6 +63,12 @@ def get_theme_css() -> str:
         <style>
         @import url('https://fonts.googleapis.com/css2?family=Manrope:wght@600&family=Space+Grotesk&family=Inter&display=swap');
 
+          /* Hide Streamlit Header (Share, Star, Edit, etc.) */
+          header[data-testid="stHeader"] {
+              visibility: hidden;
+              height: 0%;
+          }
+
           /* Desktop: keep the original wide look, just add comfortable padding */
           .main .block-container {
             padding-top: 1.1rem;
