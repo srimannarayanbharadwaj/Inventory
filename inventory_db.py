@@ -159,93 +159,102 @@ def _sync_categories_from_products(conn) -> None:
 def init_db(conn) -> None:
     if _is_postgres(conn):
         # Set a slightly longer timeout for initialization if needed, 
-        # though our column checks should make this very fast.
-        _execute(conn, "SET statement_timeout = '60s'")
+        # though our table/column checks should make this very fast.
+        _execute(conn, "SET statement_timeout = '30s'")
 
-        statements = [
-            """
-            CREATE TABLE IF NOT EXISTS categories (
-              id BIGSERIAL PRIMARY KEY,
-              name TEXT NOT NULL UNIQUE,
-              created_at TIMESTAMPTZ NOT NULL
-            )
-            """,
-            """
-            CREATE TABLE IF NOT EXISTS products (
-              id BIGSERIAL PRIMARY KEY,
-              category TEXT NOT NULL,
-              name TEXT NOT NULL,
-              created_at TIMESTAMPTZ NOT NULL,
-              UNIQUE(category, name)
-            )
-            """,
-            """
-            CREATE TABLE IF NOT EXISTS transactions (
-              id BIGSERIAL PRIMARY KEY,
-              created_at TIMESTAMPTZ NOT NULL,
-              tx_type TEXT NOT NULL CHECK (tx_type IN ('purchase', 'reduction')),
-              category TEXT NOT NULL,
-              name TEXT NOT NULL,
-              qty DOUBLE PRECISION NOT NULL CHECK (qty > 0),
-              created_by TEXT NOT NULL DEFAULT '',
-              note TEXT
-            )
-            """,
-            """
-            CREATE TABLE IF NOT EXISTS users (
-              id BIGSERIAL PRIMARY KEY,
-              username TEXT NOT NULL UNIQUE,
-              password_hash TEXT NOT NULL,
-              role TEXT NOT NULL CHECK (role IN ('admin', 'user')),
-              is_active INTEGER NOT NULL DEFAULT 1 CHECK (is_active IN (0, 1)),
-              recovery_question TEXT NOT NULL DEFAULT '',
-              recovery_answer_hash TEXT NOT NULL DEFAULT '',
-              created_at TIMESTAMPTZ NOT NULL
-            )
-            """,
-            """
-            CREATE TABLE IF NOT EXISTS orders (
-              id BIGSERIAL PRIMARY KEY,
-              created_at TIMESTAMPTZ NOT NULL,
-              category TEXT NOT NULL,
-              name TEXT NOT NULL,
-              qty DOUBLE PRECISION NOT NULL CHECK (qty > 0),
-              note TEXT,
-              status TEXT NOT NULL DEFAULT 'pending',
-              inventory_applied INTEGER NOT NULL DEFAULT 0 CHECK (inventory_applied IN (0, 1)),
-              created_by TEXT NOT NULL
-            )
-            """,
-            "CREATE INDEX IF NOT EXISTS idx_tx_product ON transactions(category, name)",
-            "CREATE INDEX IF NOT EXISTS idx_tx_created_at ON transactions(created_at)",
-            "CREATE INDEX IF NOT EXISTS idx_orders_created_by ON orders(created_by)",
-            "CREATE INDEX IF NOT EXISTS idx_orders_created_at ON orders(created_at)",
-        ]
-        for statement in statements:
-            _execute(conn, statement)
+        # 1. Check existing tables to avoid even running 'CREATE TABLE IF NOT EXISTS' 
+        # (which still requests a SHARE ROW EXCLUSIVE lock).
+        existing_tables = [row[0] for row in _execute(conn, 
+            "SELECT table_name FROM information_schema.tables WHERE table_schema = 'public'").fetchall()]
 
-        # Optimization: Check if columns exist before attempting ALTER TABLE to avoid lock contention and timeouts
-        # PostgreSQL's ALTER TABLE ADD COLUMN IF NOT EXISTS still requires an ACCESS EXCLUSIVE lock.
+        if 'categories' not in existing_tables:
+            _execute(conn, """
+                CREATE TABLE categories (
+                  id BIGSERIAL PRIMARY KEY,
+                  name TEXT NOT NULL UNIQUE,
+                  created_at TIMESTAMPTZ NOT NULL
+                )
+            """)
         
-        # Check transactions.created_by
-        res = _execute(conn, "SELECT column_name FROM information_schema.columns WHERE table_name='transactions' AND column_name='created_by'").fetchone()
-        if not res:
-            _execute(conn, "ALTER TABLE transactions ADD COLUMN created_by TEXT NOT NULL DEFAULT ''")
+        if 'products' not in existing_tables:
+            _execute(conn, """
+                CREATE TABLE products (
+                  id BIGSERIAL PRIMARY KEY,
+                  category TEXT NOT NULL,
+                  name TEXT NOT NULL,
+                  created_at TIMESTAMPTZ NOT NULL,
+                  UNIQUE(category, name)
+                )
+            """)
 
-        # Check users.recovery_question and recovery_answer_hash
-        user_cols = _execute(conn, "SELECT column_name FROM information_schema.columns WHERE table_name='users' AND column_name IN ('recovery_question', 'recovery_answer_hash')").fetchall()
-        user_col_names = [row[0] for row in user_cols]
-        if 'recovery_question' not in user_col_names:
-            _execute(conn, "ALTER TABLE users ADD COLUMN recovery_question TEXT NOT NULL DEFAULT ''")
-        if 'recovery_answer_hash' not in user_col_names:
-            _execute(conn, "ALTER TABLE users ADD COLUMN recovery_answer_hash TEXT NOT NULL DEFAULT ''")
+        if 'transactions' not in existing_tables:
+            _execute(conn, """
+                CREATE TABLE transactions (
+                  id BIGSERIAL PRIMARY KEY,
+                  created_at TIMESTAMPTZ NOT NULL,
+                  tx_type TEXT NOT NULL CHECK (tx_type IN ('purchase', 'reduction')),
+                  category TEXT NOT NULL,
+                  name TEXT NOT NULL,
+                  qty DOUBLE PRECISION NOT NULL CHECK (qty > 0),
+                  created_by TEXT NOT NULL DEFAULT '',
+                  note TEXT
+                )
+            """)
 
-        # Check orders.inventory_applied
-        res = _execute(conn, "SELECT column_name FROM information_schema.columns WHERE table_name='orders' AND column_name='inventory_applied'").fetchone()
-        if not res:
-            _execute(conn, "ALTER TABLE orders ADD COLUMN inventory_applied INTEGER NOT NULL DEFAULT 0")
+        if 'users' not in existing_tables:
+            _execute(conn, """
+                CREATE TABLE users (
+                  id BIGSERIAL PRIMARY KEY,
+                  username TEXT NOT NULL UNIQUE,
+                  password_hash TEXT NOT NULL,
+                  role TEXT NOT NULL CHECK (role IN ('admin', 'user')),
+                  is_active INTEGER NOT NULL DEFAULT 1 CHECK (is_active IN (0, 1)),
+                  recovery_question TEXT NOT NULL DEFAULT '',
+                  recovery_answer_hash TEXT NOT NULL DEFAULT '',
+                  created_at TIMESTAMPTZ NOT NULL
+                )
+            """)
 
-        # Reset timeout to default (usually 0 is unlimited or server default)
+        if 'orders' not in existing_tables:
+            _execute(conn, """
+                CREATE TABLE orders (
+                  id BIGSERIAL PRIMARY KEY,
+                  created_at TIMESTAMPTZ NOT NULL,
+                  category TEXT NOT NULL,
+                  name TEXT NOT NULL,
+                  qty DOUBLE PRECISION NOT NULL CHECK (qty > 0),
+                  note TEXT,
+                  status TEXT NOT NULL DEFAULT 'pending',
+                  inventory_applied INTEGER NOT NULL DEFAULT 0 CHECK (inventory_applied IN (0, 1)),
+                  created_by TEXT NOT NULL
+                )
+            """)
+
+        # 2. Indexes (these are also lock-sensitive)
+        _execute(conn, "CREATE INDEX IF NOT EXISTS idx_tx_product ON transactions(category, name)")
+        _execute(conn, "CREATE INDEX IF NOT EXISTS idx_tx_created_at ON transactions(created_at)")
+        _execute(conn, "CREATE INDEX IF NOT EXISTS idx_orders_created_by ON orders(created_by)")
+        _execute(conn, "CREATE INDEX IF NOT EXISTS idx_orders_created_at ON orders(created_at)")
+
+        # 3. Columns check (Optimization: only check if table already existed)
+        if 'transactions' in existing_tables:
+            res = _execute(conn, "SELECT 1 FROM information_schema.columns WHERE table_name='transactions' AND column_name='created_by'").fetchone()
+            if not res:
+                _execute(conn, "ALTER TABLE transactions ADD COLUMN created_by TEXT NOT NULL DEFAULT ''")
+
+        if 'users' in existing_tables:
+            user_cols = [row[0] for row in _execute(conn, "SELECT column_name FROM information_schema.columns WHERE table_name='users' AND column_name IN ('recovery_question', 'recovery_answer_hash')").fetchall()]
+            if 'recovery_question' not in user_cols:
+                _execute(conn, "ALTER TABLE users ADD COLUMN recovery_question TEXT NOT NULL DEFAULT ''")
+            if 'recovery_answer_hash' not in user_cols:
+                _execute(conn, "ALTER TABLE users ADD COLUMN recovery_answer_hash TEXT NOT NULL DEFAULT ''")
+
+        if 'orders' in existing_tables:
+            res = _execute(conn, "SELECT 1 FROM information_schema.columns WHERE table_name='orders' AND column_name='inventory_applied'").fetchone()
+            if not res:
+                _execute(conn, "ALTER TABLE orders ADD COLUMN inventory_applied INTEGER NOT NULL DEFAULT 0")
+
+        # Reset timeout
         _execute(conn, "SET statement_timeout = 0")
 
     else:
